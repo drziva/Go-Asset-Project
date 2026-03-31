@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"go-project/internal/constants"
 	"go-project/internal/dto"
-	handler "go-project/internal/handler/errors"
+	apiErrors "go-project/internal/handler/errors"
 	"go-project/internal/mappers"
-	"go-project/internal/models"
 	"go-project/internal/service"
 	"net/http"
 
@@ -36,14 +36,9 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	user := &models.User{
-		Email:    dto.Email,
-		Name:     dto.Name,
-		Password: dto.Password,
-	}
-
-	if err := h.authService.SignUp(user); err != nil {
-		handler.HandleError(c, err)
+	user, err := h.authService.SignUp(dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
 
 		return
 	}
@@ -73,11 +68,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
 
-	c.JSON(http.StatusAccepted, mappers.ToLoginResponse(*user))
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	h.cookieService.ClearAccessTokenCookie(c)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "user has been logged out successfully",
+	})
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+	userID, exists := c.Get(constants.UserIDKey)
 
 	if !exists {
 		c.JSON(401, gin.H{

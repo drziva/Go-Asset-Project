@@ -1,15 +1,16 @@
 package middleware
 
 import (
+	"go-project/internal/constants"
 	"go-project/internal/service"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(jwtService *service.JWTService, cookieName string) gin.HandlerFunc {
+func AuthMiddleware(jwtService *service.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie(cookieName)
+		token, err := c.Cookie(constants.AccessCookieName)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "missing authorization cookie",
@@ -27,8 +28,8 @@ func AuthMiddleware(jwtService *service.JWTService, cookieName string) gin.Handl
 			return
 		}
 
-		c.Set("user_id", claims.ID)
-		c.Set("is_admin", claims.IsAdmin)
+		c.Set(constants.UserIDKey, uint(claims.ID))
+		c.Set(constants.IsAdminKey, claims.IsAdmin)
 
 		c.Next()
 	}

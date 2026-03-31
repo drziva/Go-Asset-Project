@@ -6,11 +6,10 @@ import (
 )
 
 type AuthConfig struct {
-	JWTSecret        string
-	AccessCookieName string
-	AccessTokenTTL   int
-	IsProduction     bool
-	CookieDomain     string
+	JWTSecret      string
+	AccessTokenTTL int
+	IsProduction   bool
+	CookieDomain   string
 }
 
 func LoadAuthConfig() *AuthConfig {
@@ -30,10 +29,9 @@ func LoadAuthConfig() *AuthConfig {
 	}
 
 	return &AuthConfig{
-		JWTSecret:        secret,
-		AccessCookieName: "accessToken",
-		AccessTokenTTL:   ttl, // just for dev
-		IsProduction:     isProduction,
-		CookieDomain:     os.Getenv("COOKIE_DOMAIN"),
+		JWTSecret:      secret,
+		AccessTokenTTL: ttl, // just for dev
+		IsProduction:   isProduction,
+		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 	}
 }

@@ -1,20 +1,19 @@
 package service
 
 import (
+	"go-project/internal/constants"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 type CookieService struct {
-	cookieName   string
 	cookieDomain string
 	secure       bool
 }
 
-func NewCookieService(cookieName, cookieDomain string, secure bool) *CookieService {
+func NewCookieService(cookieDomain string, secure bool) *CookieService {
 	return &CookieService{
-		cookieName,
 		cookieDomain,
 		secure,
 	}
@@ -22,7 +21,7 @@ func NewCookieService(cookieName, cookieDomain string, secure bool) *CookieServi
 
 func (s *CookieService) SetAccessTokenCookie(c *gin.Context, token string, maxAgeSeconds int) {
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     s.cookieName,
+		Name:     constants.AccessCookieName,
 		Value:    token,
 		Path:     "/",
 		Domain:   s.cookieDomain,
@@ -33,10 +32,10 @@ func (s *CookieService) SetAccessTokenCookie(c *gin.Context, token string, maxAg
 	})
 }
 
-func (s *CookieService) ClearAccessTokenCookie(c *gin.Context, token string, maxAgeSeconds int) {
+func (s *CookieService) ClearAccessTokenCookie(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
-		Name:     s.cookieName,
-		Value:    token,
+		Name:     constants.AccessCookieName,
+		Value:    "",
 		Path:     "/",
 		Domain:   s.cookieDomain,
 		MaxAge:   -1,
