@@ -12,12 +12,14 @@ import (
 )
 
 type AuthService struct {
-	repo *repository.UserRepository
+	repo       *repository.UserRepository
+	jwtService *JWTService
 }
 
-func NewAuthservice(repo *repository.UserRepository) *AuthService {
+func NewAuthservice(repo *repository.UserRepository, jwtService *JWTService) *AuthService {
 	return &AuthService{
 		repo,
+		jwtService,
 	}
 }
 
@@ -35,19 +37,33 @@ func (s *AuthService) SignUp(user *models.User) error {
 	return mapDBError(err)
 }
 
-func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, error) {
+func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
 	user, err := s.repo.GetUserByEmail(dto.Email)
 
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	passwordMatch := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(dto.Password))
 	if passwordMatch != nil {
-		return nil, appErrors.ErrInvalidCredentials
+		return nil, "", appErrors.ErrInvalidCredentials
 	}
 
-	return user, nil
+	token, err := s.jwtService.GenerateAccessToken(user.ID, user.IsAdmin)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return user, token, nil
+}
+
+func (s *AuthService) Me(id uint) (*models.User, error) {
+	user, err := s.repo.GetUserById(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, err
 }
 
 func hashPassword(password string) (string, error) {

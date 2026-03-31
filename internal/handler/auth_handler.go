@@ -12,12 +12,16 @@ import (
 )
 
 type AuthHandler struct {
-	service *service.AuthService
+	authService   *service.AuthService
+	cookieService *service.CookieService
+	accessTTL     int
 }
 
-func NewAuthHandler(service *service.AuthService) *AuthHandler {
+func NewAuthHandler(authService *service.AuthService, cookieService *service.CookieService, accessTTL int) *AuthHandler {
 	return &AuthHandler{
-		service,
+		authService,
+		cookieService,
+		accessTTL,
 	}
 }
 
@@ -38,7 +42,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		Password: dto.Password,
 	}
 
-	if err := h.service.SignUp(user); err != nil {
+	if err := h.authService.SignUp(user); err != nil {
 		handler.HandleError(c, err)
 
 		return
@@ -58,7 +62,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Login(dto)
+	user, token, err := h.authService.Login(dto)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "invalid credentials",
@@ -67,5 +71,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
+
 	c.JSON(http.StatusAccepted, mappers.ToLoginResponse(*user))
+}
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+
+	if !exists {
+		c.JSON(401, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	user, err := h.authService.Me(userID.(uint))
+
+	if err != nil {
+		c.JSON(404, gin.H{
+			"error": "user not found",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
 }

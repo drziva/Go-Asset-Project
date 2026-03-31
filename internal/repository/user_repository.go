@@ -30,3 +30,14 @@ func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {
 
 	return user, err
 }
+
+func (r *UserRepository) GetUserById(id uint) (*models.User, error) {
+	var user *models.User
+
+	err := r.db.
+		Where("id = ?", id).
+		First(&user).
+		Error
+
+	return user, err
+}
