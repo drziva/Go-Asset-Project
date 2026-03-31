@@ -17,7 +17,10 @@ func main() {
 
 	db := db.NewDatabase()
 
-	db.AutoMigrate(&models.User{})
+	db.AutoMigrate(
+		&models.User{},
+		&models.Asset{},
+	)
 
 	r := routes.SetupRoutes(db)
 
