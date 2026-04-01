@@ -35,3 +35,11 @@ func (r *AssetRepository) GetAssetById(userId, id uint) (models.Asset, error) {
 
 	return asset, err
 }
+
+func (r *AssetRepository) GetAllAssets() ([]models.Asset, error) {
+	var assets []models.Asset
+
+	err := r.db.Find(&assets).Error
+
+	return assets, err
+}

@@ -23,6 +23,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 
 	//MIDDLEWARE
 	authMiddleware := middleware.AuthMiddleware(jwtService)
+	adminMiddleware := middleware.AdminMiddleware()
 
 	//AUTH
 	authService := service.NewAuthservice(userRepo, jwtService)
@@ -39,6 +40,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 		auth := api.Group("/auth")
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/signup", authHandler.SignUp)
+		auth.POST("/logout", authHandler.Logout)
 
 		auth.Use(authMiddleware)
 		{
@@ -48,9 +50,20 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 		protected := api.Group("/")
 		protected.Use(authMiddleware)
 		{
+			//Regular users
 			assets := protected.Group("/assets")
 			{
 				assets.POST("", assetHandler.CreateAsset)
+			}
+
+			//Admins
+			admin := protected.Group("/admin")
+			admin.Use(adminMiddleware)
+			{
+				adminAssets := admin.Group("/assets")
+				{
+					adminAssets.GET("", assetHandler.GetAllAssets)
+				}
 			}
 		}
 

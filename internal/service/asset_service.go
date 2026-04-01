@@ -31,3 +31,12 @@ func (s *AssetService) CreateAsset(userId uint, dto dto.CreateAssetDTO) (*models
 
 	return asset, err
 }
+
+func (s *AssetService) GetAllAssets() ([]models.Asset, error) {
+	assets, err := s.repo.GetAllAssets()
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return assets, err
+}

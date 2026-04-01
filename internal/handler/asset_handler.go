@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"go-project/internal/constants"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
+	"go-project/internal/handler/utils"
 	"go-project/internal/mappers"
 	"go-project/internal/service"
 	"net/http"
@@ -22,14 +22,7 @@ func NewAssetHandler(assetService *service.AssetService) *AssetHandler {
 }
 
 func (h *AssetHandler) CreateAsset(c *gin.Context) {
-	userID, exists := c.Get(constants.UserIDKey)
-
-	if !exists {
-		c.JSON(401, gin.H{
-			"error": "unauthorized",
-		})
-		return
-	}
+	userID := utils.ExtractUserID(c)
 
 	var dto dto.CreateAssetDTO
 
@@ -41,7 +34,7 @@ func (h *AssetHandler) CreateAsset(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.assetService.CreateAsset(userID.(uint), dto)
+	asset, err := h.assetService.CreateAsset(userID, dto)
 	if err != nil {
 		apiErrors.HandleError(c, err)
 
@@ -49,4 +42,21 @@ func (h *AssetHandler) CreateAsset(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, mappers.ToAssetResponse(*asset))
+}
+
+func (h *AssetHandler) GetAllAssets(c *gin.Context) {
+	assets, err := h.assetService.GetAllAssets()
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	var assetResponses []dto.AssetResponse
+
+	for _, asset := range assets {
+		assetResponses = append(assetResponses, mappers.ToAssetResponse(asset))
+	}
+
+	c.JSON(http.StatusOK, assetResponses)
 }

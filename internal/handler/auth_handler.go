@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"go-project/internal/constants"
 	"go-project/internal/dto"
 	httpErrors "go-project/internal/handler/errors"
+	"go-project/internal/handler/utils"
 	"go-project/internal/mappers"
 	"go-project/internal/service"
 	"net/http"
@@ -80,16 +80,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID, exists := c.Get(constants.UserIDKey)
+	userID := utils.ExtractUserID(c)
 
-	if !exists {
-		c.JSON(401, gin.H{
-			"error": "unauthorized",
-		})
-		return
-	}
-
-	user, err := h.authService.Me(userID.(uint))
+	user, err := h.authService.Me(userID)
 
 	if err != nil {
 		c.JSON(404, gin.H{

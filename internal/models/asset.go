@@ -6,5 +6,5 @@ type Asset struct {
 	Description string
 
 	UserID uint // the relation gets defined in the "User" model
-	User   User `grom:"constraint:onDelete:CASCADE;"`
+	User   User `gorm:"constraint:onDelete:CASCADE;"`
 }
