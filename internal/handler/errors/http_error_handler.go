@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"go-project/internal/constants"
 	appErrors "go-project/internal/errors"
 
 	"github.com/gin-gonic/gin"
@@ -43,6 +44,10 @@ func HandleError(c *gin.Context, err error) {
 	// 401
 	case errors.Is(err, appErrors.ErrInvalidCredentials),
 		errors.Is(err, appErrors.ErrUnauthorized):
+
+		if errors.Is(err, appErrors.ErrUnauthorized) {
+			c.SetCookie(constants.AccessCookieName, "", -1, "/", "", true, true)
+		}
 
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": err.Error(),

@@ -44,6 +44,42 @@ func (h *AssetHandler) CreateAsset(c *gin.Context) {
 	c.JSON(http.StatusCreated, mappers.ToAssetResponse(*asset))
 }
 
+func (h *AssetHandler) GetAssetsForUser(c *gin.Context) {
+	userID := utils.ExtractUserID(c)
+	assets, err := h.assetService.GetAssetsForUser(userID)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	var assetResponses []dto.AssetResponse
+
+	for _, asset := range assets {
+		assetResponses = append(assetResponses, mappers.ToAssetResponse(asset))
+	}
+
+	c.JSON(http.StatusOK, assetResponses)
+}
+
+func (h *AssetHandler) GetAssetById(c *gin.Context) {
+	userID := utils.ExtractUserID(c)
+	ID, err := utils.ExtractIDParam(c)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	asset, err := h.assetService.GetAssetById(userID, ID)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToAssetResponse(*asset))
+}
+
 func (h *AssetHandler) GetAllAssets(c *gin.Context) {
 	assets, err := h.assetService.GetAllAssets()
 
@@ -59,4 +95,47 @@ func (h *AssetHandler) GetAllAssets(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, assetResponses)
+}
+
+func (h *AssetHandler) UpdateAsset(c *gin.Context) {
+	var dto *dto.UpdateAssetDTO
+	userID := utils.ExtractUserID(c)
+	ID, err := utils.ExtractIDParam(c)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	err = c.ShouldBindJSON(&dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	updatedAsset, err := h.assetService.UpdateAsset(userID, ID, *dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToAssetResponse(*updatedAsset))
+}
+
+func (h *AssetHandler) DeleteAsset(c *gin.Context) {
+	userID := utils.ExtractUserID(c)
+	ID, err := utils.ExtractIDParam(c)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	err = h.assetService.DeleteAsset(userID, ID)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
 }

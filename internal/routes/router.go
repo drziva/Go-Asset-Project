@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"go-project/internal/client"
 	"go-project/internal/config"
 	"go-project/internal/handler"
 	"go-project/internal/middleware"
@@ -34,7 +35,14 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	assetService := service.NewAssetService(assetRepo)
 	assetHandler := handler.NewAssetHandler(assetService)
 
+	//MICROSERVICE
+	microClient := client.NewMicroClient("http://localhost:8081/api")
+	microService := service.NewMicroService(microClient)
+	microHandler := handler.NewMicroHandler(microService)
+
 	api := r.Group("/api")
+	//DEV
+	api.GET("/hello", microHandler.GetHello)
 
 	{
 		auth := api.Group("/auth")
@@ -54,6 +62,10 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 			assets := protected.Group("/assets")
 			{
 				assets.POST("", assetHandler.CreateAsset)
+				assets.GET("", assetHandler.GetAssetsForUser)
+				assets.GET("/:id", assetHandler.GetAssetById)
+				assets.PUT("/:id", assetHandler.UpdateAsset)
+				assets.DELETE("/:id", assetHandler.DeleteAsset)
 			}
 
 			//Admins

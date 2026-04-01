@@ -17,14 +17,32 @@ func NewAssetService(repo *repository.AssetRepository) *AssetService {
 	}
 }
 
-func (s *AssetService) CreateAsset(userId uint, dto dto.CreateAssetDTO) (*models.Asset, error) {
+func (s *AssetService) CreateAsset(userID uint, dto dto.CreateAssetDTO) (*models.Asset, error) {
 	asset := &models.Asset{
-		UserID:      userId,
+		UserID:      userID,
 		Name:        dto.Name,
 		Description: dto.Description,
 	}
 
-	err := s.repo.CreateAsset(userId, asset)
+	err := s.repo.CreateAsset(userID, asset)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return asset, err
+}
+
+func (s *AssetService) GetAssetsForUser(userID uint) ([]models.Asset, error) {
+	assets, err := s.repo.GetAssetsForUser(userID)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return assets, err
+}
+
+func (s *AssetService) GetAssetById(userID uint, ID uint) (*models.Asset, error) {
+	asset, err := s.repo.GetAssetById(userID, ID)
 	if err != nil {
 		return nil, dbErrors.MapDBError(err)
 	}
@@ -39,4 +57,23 @@ func (s *AssetService) GetAllAssets() ([]models.Asset, error) {
 	}
 
 	return assets, err
+}
+
+func (s *AssetService) UpdateAsset(userID, ID uint, dto dto.UpdateAssetDTO) (*models.Asset, error) {
+	asset := &models.Asset{
+		UserID:      userID,
+		Name:        dto.Name,
+		Description: dto.Description,
+	}
+
+	asset, err := s.repo.UpdateAsset(userID, ID, asset)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return asset, err
+}
+
+func (s *AssetService) DeleteAsset(userID, ID uint) error {
+	return dbErrors.MapDBError(s.repo.DeleteAsset(userID, ID))
 }

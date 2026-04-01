@@ -28,12 +28,12 @@ func (r *AssetRepository) GetAssetsForUser(userId uint) ([]models.Asset, error) 
 	return assets, err
 }
 
-func (r *AssetRepository) GetAssetById(userId, id uint) (models.Asset, error) {
+func (r *AssetRepository) GetAssetById(userId, id uint) (*models.Asset, error) {
 	var asset models.Asset
 
 	err := r.db.Where("id = ? AND user_id = ?", id, userId).First(&asset).Error
 
-	return asset, err
+	return &asset, err
 }
 
 func (r *AssetRepository) GetAllAssets() ([]models.Asset, error) {
@@ -42,4 +42,24 @@ func (r *AssetRepository) GetAllAssets() ([]models.Asset, error) {
 	err := r.db.Find(&assets).Error
 
 	return assets, err
+}
+
+func (r *AssetRepository) UpdateAsset(userID, ID uint, asset *models.Asset) (*models.Asset, error) {
+	dbAsset, err := r.GetAssetById(userID, ID)
+
+	err = r.db.Model(&dbAsset).Updates(map[string]interface{}{
+		"name":        asset.Name,
+		"description": asset.Description,
+	}).First(&dbAsset).Error
+
+	return dbAsset, err
+}
+
+func (r *AssetRepository) DeleteAsset(userID uint, ID uint) error {
+	dbAsset, err := r.GetAssetById(userID, ID)
+	if err != nil {
+		return err
+	}
+
+	return r.db.Delete(&dbAsset).Error
 }

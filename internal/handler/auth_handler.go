@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-project/internal/dto"
+	apiErrors "go-project/internal/handler/errors"
 	httpErrors "go-project/internal/handler/errors"
 	"go-project/internal/handler/utils"
 	"go-project/internal/mappers"
@@ -81,13 +82,10 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID := utils.ExtractUserID(c)
-
 	user, err := h.authService.Me(userID)
 
 	if err != nil {
-		c.JSON(404, gin.H{
-			"error": "user not found",
-		})
+		apiErrors.HandleError(c, err)
 		return
 	}
 
