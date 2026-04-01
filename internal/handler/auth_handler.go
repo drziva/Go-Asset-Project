@@ -3,7 +3,7 @@ package handler
 import (
 	"go-project/internal/constants"
 	"go-project/internal/dto"
-	apiErrors "go-project/internal/handler/errors"
+	httpErrors "go-project/internal/handler/errors"
 	"go-project/internal/mappers"
 	"go-project/internal/service"
 	"net/http"
@@ -38,7 +38,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 
 	user, err := h.authService.SignUp(dto)
 	if err != nil {
-		apiErrors.HandleError(c, err)
+		httpErrors.HandleError(c, err)
 
 		return
 	}

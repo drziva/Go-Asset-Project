@@ -1,0 +1,65 @@
+package handler
+
+import (
+	"errors"
+	"log"
+	"net/http"
+
+	appErrors "go-project/internal/errors"
+
+	"github.com/gin-gonic/gin"
+)
+
+func HandleError(c *gin.Context, err error) {
+	log.Printf("ERROR TYPE: %T\n", err)
+	log.Printf("ERROR VALUE: %+v\n", err)
+
+	switch {
+
+	// 404
+	case errors.Is(err, appErrors.ErrNotFound):
+
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": err.Error(),
+		})
+
+	// 409
+	case errors.Is(err, appErrors.ErrEmailAlreadyExists),
+		errors.Is(err, appErrors.ErrConflict):
+
+		c.JSON(http.StatusConflict, gin.H{
+			"error": err.Error(),
+		})
+
+	// 400
+	case errors.Is(err, appErrors.ErrInvalidInput),
+		errors.Is(err, appErrors.ErrMissingRequiredField),
+		errors.Is(err, appErrors.ErrInvalidFormat):
+
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+
+	// 401
+	case errors.Is(err, appErrors.ErrInvalidCredentials),
+		errors.Is(err, appErrors.ErrUnauthorized):
+
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": err.Error(),
+		})
+
+	// 403
+	case errors.Is(err, appErrors.ErrForbidden):
+
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": err.Error(),
+		})
+
+	default:
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "internal server error",
+		})
+
+	}
+}

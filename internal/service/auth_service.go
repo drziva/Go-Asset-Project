@@ -1,13 +1,13 @@
 package service
 
 import (
-	"errors"
-	"go-project/internal/dto"
 	appErrors "go-project/internal/errors"
+	dbErrors "go-project/internal/service/errors"
+
+	"go-project/internal/dto"
 	"go-project/internal/models"
 	"go-project/internal/repository"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -37,14 +37,14 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
 
 	//CREATE USER AND MAP POTENTIAL ERROR
 	err = s.repo.CreateUser(user)
-	return user, mapDBError(err)
+	return user, dbErrors.MapDBError(err)
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
 	user, err := s.repo.GetUserByEmail(dto.Email)
 
 	if err != nil {
-		return nil, "", err
+		return nil, "", dbErrors.MapDBError(err)
 	}
 
 	passwordMatch := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(dto.Password))
@@ -61,7 +61,13 @@ func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
 }
 
 func (s *AuthService) Me(id uint) (*models.User, error) {
-	return s.repo.GetUserById(id)
+	user, err := s.repo.GetUserById(id)
+
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return user, nil
 }
 
 func hashPassword(password string) (string, error) {
@@ -71,24 +77,4 @@ func hashPassword(password string) (string, error) {
 	)
 
 	return string(hash), err
-}
-
-func mapDBError(err error) error {
-
-	if err == nil {
-		return nil
-	}
-
-	var pgErr *pgconn.PgError
-
-	if errors.As(err, &pgErr) {
-
-		switch pgErr.Code {
-
-		case "23505":
-			return appErrors.ErrEmailAlreadyExists
-		}
-	}
-
-	return err
 }

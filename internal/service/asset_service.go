@@ -4,6 +4,7 @@ import (
 	"go-project/internal/dto"
 	"go-project/internal/models"
 	"go-project/internal/repository"
+	dbErrors "go-project/internal/service/errors"
 )
 
 type AssetService struct {
@@ -25,7 +26,7 @@ func (s *AssetService) CreateAsset(userId uint, dto dto.CreateAssetDTO) (*models
 
 	err := s.repo.CreateAsset(userId, asset)
 	if err != nil {
-		return nil, err
+		return nil, dbErrors.MapDBError(err)
 	}
 
 	return asset, err
