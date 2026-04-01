@@ -23,18 +23,21 @@ func NewAuthservice(repo *repository.UserRepository, jwtService *JWTService) *Au
 	}
 }
 
-func (s *AuthService) SignUp(user *models.User) error {
-	hashedPassword, err := hashPassword(user.Password)
+func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
+	hashedPassword, err := hashPassword(dto.Password)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	user.Password = hashedPassword
+	user := &models.User{
+		Name:     dto.Name,
+		Email:    dto.Email,
+		Password: hashedPassword,
+	}
 
 	//CREATE USER AND MAP POTENTIAL ERROR
 	err = s.repo.CreateUser(user)
-
-	return mapDBError(err)
+	return user, mapDBError(err)
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
@@ -58,12 +61,7 @@ func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
 }
 
 func (s *AuthService) Me(id uint) (*models.User, error) {
-	user, err := s.repo.GetUserById(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, err
+	return s.repo.GetUserById(id)
 }
 
 func hashPassword(password string) (string, error) {

@@ -15,14 +15,23 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
 	cfg := config.LoadAuthConfig()
-	cookieService := service.NewCookieService(cfg.AccessCookieName, cfg.CookieDomain, cfg.IsProduction)
+	cookieService := service.NewCookieService(cfg.CookieDomain, cfg.IsProduction)
 	jwtService := service.NewJWTService(cfg.JWTSecret, cfg.AccessTokenTTL)
 
+	//USER REPO
 	userRepo := repository.NewUserRepository(db)
 
-	authService := service.NewAuthservice(userRepo, jwtService)
+	//MIDDLEWARE
+	authMiddleware := middleware.AuthMiddleware(jwtService)
 
+	//AUTH
+	authService := service.NewAuthservice(userRepo, jwtService)
 	authHandler := handler.NewAuthHandler(authService, cookieService, cfg.AccessTokenTTL)
+
+	//ASSETS
+	assetRepo := repository.NewAssetRepository(db)
+	assetService := service.NewAssetService(assetRepo)
+	assetHandler := handler.NewAssetHandler(assetService)
 
 	api := r.Group("/api")
 
@@ -31,9 +40,18 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/signup", authHandler.SignUp)
 
-		auth.Use(middleware.AuthMiddleware(jwtService, cfg.AccessCookieName))
+		auth.Use(authMiddleware)
 		{
 			auth.GET("/me", authHandler.Me)
+		}
+
+		protected := api.Group("/")
+		protected.Use(authMiddleware)
+		{
+			assets := protected.Group("/assets")
+			{
+				assets.POST("", assetHandler.CreateAsset)
+			}
 		}
 
 	}
