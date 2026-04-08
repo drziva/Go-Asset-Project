@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,7 +34,6 @@ func (s *JWTService) GenerateAccessToken(ID uint, isAdmin bool) (string, error) 
 		IsAdmin: isAdmin,
 
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   strconv.Itoa(int(ID)),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
 			NotBefore: jwt.NewNumericDate(now),

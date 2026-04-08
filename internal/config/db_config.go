@@ -1,8 +1,7 @@
 package config
 
 import (
-	"log"
-	"os"
+	"go-project/internal/config/utils"
 )
 
 type DBConfig struct {
@@ -10,11 +9,7 @@ type DBConfig struct {
 }
 
 func NewDBConfig() *DBConfig {
-	DSN := os.Getenv("DSN")
-	if DSN == "" {
-		log.Fatal("Failed to load DSN")
-
-	}
+	DSN := utils.GetRequiredEnv("DSN")
 
 	return &DBConfig{
 		DSN,

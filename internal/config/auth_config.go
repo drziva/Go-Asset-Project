@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"go-project/internal/config/utils"
 	"os"
 )
 
@@ -13,19 +13,15 @@ type AuthConfig struct {
 }
 
 func LoadAuthConfig() *AuthConfig {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		log.Fatal("JWT Secret failed to load")
-	}
-
-	var ttl int
+	secret := utils.GetRequiredEnv("JWT_SECRET")
 
 	//TTL based on prod/dev
+	var ttl int
 	isProduction := os.Getenv("APP_ENV") == "production"
 	if !isProduction {
-		ttl = 15 * 24 * 60 * 60
+		ttl = 15 * 24 * 60 * 60 // 15 days
 	} else {
-		ttl = 15 * 60
+		ttl = 15 * 60 //15 minutes
 	}
 
 	return &AuthConfig{
