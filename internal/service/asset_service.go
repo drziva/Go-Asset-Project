@@ -59,6 +59,15 @@ func (s *AssetService) GetAllAssets() ([]models.Asset, error) {
 	return assets, err
 }
 
+func (s *AssetService) GetAnyAssetById(ID uint) (*models.Asset, error) {
+	asset, err := s.repo.GetAnyAssetById(ID)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return asset, err
+}
+
 func (s *AssetService) UpdateAsset(userID, ID uint, dto dto.UpdateAssetDTO) (*models.Asset, error) {
 	asset := &models.Asset{
 		UserID:      userID,
@@ -67,6 +76,20 @@ func (s *AssetService) UpdateAsset(userID, ID uint, dto dto.UpdateAssetDTO) (*mo
 	}
 
 	asset, err := s.repo.UpdateAsset(userID, ID, asset)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return asset, err
+}
+
+func (s *AssetService) UpdateAnyAsset(ID uint, dto dto.UpdateAssetDTO) (*models.Asset, error) {
+	asset := &models.Asset{
+		Name:        dto.Name,
+		Description: dto.Description,
+	}
+
+	asset, err := s.repo.UpdateAnyAsset(ID, asset)
 	if err != nil {
 		return nil, dbErrors.MapDBError(err)
 	}

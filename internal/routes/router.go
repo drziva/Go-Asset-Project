@@ -75,6 +75,8 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 				adminAssets := admin.Group("/assets")
 				{
 					adminAssets.GET("", assetHandler.GetAllAssets)
+					adminAssets.GET("/:id", assetHandler.GetAnyAssetById)
+					adminAssets.PUT("/:id", assetHandler.UpdateAnyAsset)
 				}
 			}
 		}

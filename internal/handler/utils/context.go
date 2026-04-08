@@ -13,6 +13,12 @@ func ExtractUserID(c *gin.Context) uint {
 	return userID.(uint)
 }
 
+func ExtractIsAdmin(c *gin.Context) bool {
+	isAdmin, _ := c.Get(constants.IsAdminKey)
+
+	return isAdmin.(bool)
+}
+
 func ExtractIDParam(c *gin.Context) (uint, error) {
 	idParam := c.Param("id") // string
 

@@ -139,3 +139,42 @@ func (h *AssetHandler) DeleteAsset(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+// ADMIN FUNCTIONS
+func (h *AssetHandler) GetAnyAssetById(c *gin.Context) {
+	ID, err := utils.ExtractIDParam(c)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	asset, err := h.assetService.GetAnyAssetById(ID)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToAssetResponse(*asset))
+}
+
+func (h *AssetHandler) UpdateAnyAsset(c *gin.Context) {
+	var dto *dto.UpdateAssetDTO
+	ID, err := utils.ExtractIDParam(c)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+	err = c.ShouldBindJSON(&dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+	updatedAsset, err := h.assetService.UpdateAnyAsset(ID, *dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToAssetResponse(*updatedAsset))
+}
