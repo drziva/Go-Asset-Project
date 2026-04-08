@@ -2,9 +2,10 @@ package handler
 
 import (
 	"go-project/internal/dto"
-	handler "go-project/internal/handler/errors"
+	apiErrors "go-project/internal/handler/errors"
+	httpErrors "go-project/internal/handler/errors"
+	"go-project/internal/handler/utils"
 	"go-project/internal/mappers"
-	"go-project/internal/models"
 	"go-project/internal/service"
 	"net/http"
 
@@ -12,12 +13,16 @@ import (
 )
 
 type AuthHandler struct {
-	service *service.AuthService
+	authService   *service.AuthService
+	cookieService *service.CookieService
+	accessTTL     int
 }
 
-func NewAuthHandler(service *service.AuthService) *AuthHandler {
+func NewAuthHandler(authService *service.AuthService, cookieService *service.CookieService, accessTTL int) *AuthHandler {
 	return &AuthHandler{
-		service,
+		authService,
+		cookieService,
+		accessTTL,
 	}
 }
 
@@ -32,14 +37,9 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	user := &models.User{
-		Email:    dto.Email,
-		Name:     dto.Name,
-		Password: dto.Password,
-	}
-
-	if err := h.service.SignUp(user); err != nil {
-		handler.HandleError(c, err)
+	user, err := h.authService.SignUp(dto)
+	if err != nil {
+		httpErrors.HandleError(c, err)
 
 		return
 	}
@@ -58,7 +58,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Login(dto)
+	user, token, err := h.authService.Login(dto)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "invalid credentials",
@@ -67,5 +67,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, mappers.ToLoginResponse(*user))
+	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	h.cookieService.ClearAccessTokenCookie(c)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "user has been logged out successfully",
+	})
+}
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	userID := utils.ExtractUserID(c)
+	user, err := h.authService.Me(userID)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
 }

@@ -11,5 +11,6 @@ func ToLoginResponse(user models.User) dto.LoginResponse {
 		Name:      user.Name,
 		Email:     user.Email,
 		CreatedAt: user.CreatedAt,
+		IsAdmin:   user.IsAdmin,
 	}
 }

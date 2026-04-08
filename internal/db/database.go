@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"go-project/internal/config"
 	"log"
 
 	"gorm.io/driver/postgres"
@@ -9,9 +10,9 @@ import (
 )
 
 func NewDatabase() *gorm.DB {
-	dsn := "host=localhost user=postgres password=nikola dbname=go_project port=5432 sslmode=disable"
+	cfg := config.NewDBConfig()
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{})
 
 	if err != nil {
 		log.Fatal("Failed to Connect with DB: ", err)
