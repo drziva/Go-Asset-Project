@@ -41,7 +41,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	microHandler := handler.NewMicroHandler(microService)
 
 	api := r.Group("/api")
-	//DEV
+	//DEV - MICROSERVICE TEST
 	api.GET("/hello", microHandler.GetHello)
 
 	{
@@ -55,7 +55,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 			auth.GET("/me", authHandler.Me)
 		}
 
-		protected := api.Group("/")
+		protected := api.Group("")
 		protected.Use(authMiddleware)
 		{
 			//Regular users
@@ -63,9 +63,13 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 			{
 				assets.POST("", assetHandler.CreateAsset)
 				assets.GET("", assetHandler.GetAssetsForUser)
+
 				assets.GET("/:id", assetHandler.GetAssetById)
 				assets.PUT("/:id", assetHandler.UpdateAsset)
 				assets.DELETE("/:id", assetHandler.DeleteAsset)
+
+				assets.GET("/:id/download", assetHandler.DownloadAssetById)
+
 			}
 
 			//Admins
@@ -77,6 +81,8 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 					adminAssets.GET("", assetHandler.GetAllAssets)
 					adminAssets.GET("/:id", assetHandler.GetAnyAssetById)
 					adminAssets.PUT("/:id", assetHandler.UpdateAnyAsset)
+
+					adminAssets.GET("/:id/download", assetHandler.DownloadAnyAssetById)
 				}
 			}
 		}

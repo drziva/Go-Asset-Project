@@ -17,10 +17,13 @@ func NewAssetService(repo *repository.AssetRepository) *AssetService {
 	}
 }
 
-func (s *AssetService) CreateAsset(userID uint, dto dto.CreateAssetDTO) (*models.Asset, error) {
+func (s *AssetService) CreateAsset(userID uint, dto dto.ServiceCreateAssetDTO) (*models.Asset, error) {
 	asset := &models.Asset{
 		UserID:      userID,
-		Name:        dto.Name,
+		FileName:    dto.FileName,
+		FileSize:    dto.FileSize,
+		FilePath:    dto.FilePath,
+		MimeType:    dto.MimeType,
 		Description: dto.Description,
 	}
 
@@ -71,7 +74,7 @@ func (s *AssetService) GetAnyAssetById(ID uint) (*models.Asset, error) {
 func (s *AssetService) UpdateAsset(userID, ID uint, dto dto.UpdateAssetDTO) (*models.Asset, error) {
 	asset := &models.Asset{
 		UserID:      userID,
-		Name:        dto.Name,
+		FileName:    dto.FileName,
 		Description: dto.Description,
 	}
 
@@ -85,7 +88,7 @@ func (s *AssetService) UpdateAsset(userID, ID uint, dto dto.UpdateAssetDTO) (*mo
 
 func (s *AssetService) UpdateAnyAsset(ID uint, dto dto.UpdateAssetDTO) (*models.Asset, error) {
 	asset := &models.Asset{
-		Name:        dto.Name,
+		FileName:    dto.FileName,
 		Description: dto.Description,
 	}
 

@@ -44,7 +44,7 @@ func (r *AssetRepository) UpdateAsset(userID, ID uint, asset *models.Asset) (*mo
 		Model(dbAsset).
 		Where("id = ? AND user_id = ?", ID, userID).
 		Updates(map[string]interface{}{
-			"name":        asset.Name,
+			"file_name":   asset.FileName,
 			"description": asset.Description,
 		}).
 		Error
@@ -88,7 +88,7 @@ func (r *AssetRepository) UpdateAnyAsset(ID uint, asset *models.Asset) (*models.
 		Model(dbAsset).
 		Where("id = ?", ID).
 		Updates(map[string]interface{}{
-			"name":        asset.Name,
+			"file_name":   asset.FileName,
 			"description": asset.Description,
 		}).
 		Error
