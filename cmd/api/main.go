@@ -15,14 +15,14 @@ func main() {
 		log.Fatal("Failed to load env")
 	}
 
-	db := db.NewDatabase()
+	database := db.NewDatabase()
 
-	db.AutoMigrate(
+	database.AutoMigrate(
 		&models.User{},
 		&models.Asset{},
 	)
 
-	r := routes.SetupRoutes(db)
+	r := routes.SetupRoutes(database)
 
 	r.Run()
 }
