@@ -17,9 +17,11 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(user *models.User) error {
-	err := r.db.Create(user).Error
+	return r.db.Create(user).Error
+}
 
-	return err
+func (r *UserRepository) UpdateUser(user *models.User) error {
+	return r.db.Save(user).Error
 }
 
 func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {

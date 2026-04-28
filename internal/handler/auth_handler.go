@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
 	httpErrors "go-project/internal/handler/errors"
@@ -88,6 +89,52 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		apiErrors.HandleError(c, err)
 		return
 	}
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
+}
+
+func (h *AuthHandler) GoogleLogin(c *gin.Context) {
+	url := h.authService.GetGoogleLoginURL()
+	c.Redirect(302, url)
+}
+
+func (h *AuthHandler) GoogleCallback(c *gin.Context) {
+	code := c.Query("code")
+
+	authResult, token, err := h.authService.HandleGoogleCallback(c.Request.Context(), code)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+	}
+
+	if authResult.Linked == false {
+		c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
+	}
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": "auth failed"})
+		return
+	}
+
+	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*authResult.User))
+}
+
+func (h *AuthHandler) LinkAndLogin(c *gin.Context) {
+	var dto dto.LinkRequest
+
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		apiErrors.HandleError(c, err)
+	}
+	fmt.Print("-----------TOKEN------------------", dto.LinkToken)
+
+	user, token, err := h.authService.LinkAndLogin(dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
 
 	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
 }

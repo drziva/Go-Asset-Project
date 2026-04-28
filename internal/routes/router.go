@@ -16,6 +16,8 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
 	cfg := config.LoadAuthConfig()
+	googleCfg := client.NewGoogleOauthConfig()
+
 	cookieService := service.NewCookieService(cfg.CookieDomain, cfg.IsProduction)
 	jwtService := service.NewJWTService(cfg.JWTSecret, cfg.AccessTokenTTL)
 
@@ -27,7 +29,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	adminMiddleware := middleware.AdminMiddleware()
 
 	//AUTH
-	authService := service.NewAuthservice(userRepo, jwtService)
+	authService := service.NewAuthservice(userRepo, googleCfg, jwtService)
 	authHandler := handler.NewAuthHandler(authService, cookieService, cfg.AccessTokenTTL)
 
 	//ASSETS
@@ -49,6 +51,10 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/signup", authHandler.SignUp)
 		auth.POST("/logout", authHandler.Logout)
+		auth.GET("/login/google", authHandler.GoogleLogin)
+
+		auth.GET("/google/callback", authHandler.GoogleCallback)
+		auth.POST("/google/link-account", authHandler.LinkAndLogin)
 
 		auth.Use(authMiddleware)
 		{

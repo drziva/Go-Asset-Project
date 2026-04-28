@@ -1,6 +1,8 @@
 package dto
 
-import "time"
+import (
+	"time"
+)
 
 type SignUpDTO struct {
 	Name     string `json:"name" binding:"required,min=3,max=50"`
@@ -19,4 +21,9 @@ type LoginResponse struct {
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
 	IsAdmin   bool      `json:"is_admin"`
+}
+
+type LinkRequest struct {
+	LinkToken string `json:"link_token"`
+	Password  string `json:"password"`
 }

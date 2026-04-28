@@ -19,6 +19,12 @@ type AccessTokenClaims struct {
 	jwt.RegisteredClaims
 }
 
+type LinkTokenClaims struct {
+	Email string `json:"email"`
+
+	jwt.RegisteredClaims
+}
+
 func NewJWTService(secret string, ttlSeconds int) *JWTService {
 	return &JWTService{
 		secret: []byte(secret),
@@ -43,6 +49,39 @@ func (s *JWTService) GenerateAccessToken(ID uint, isAdmin bool) (string, error) 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	return token.SignedString(s.secret)
+}
+
+func (s *JWTService) GenerateLinkToken(email string) (string, error) {
+	claims := &LinkTokenClaims{
+		Email: email,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(5 * time.Minute)), // short TTL
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Subject:   email,
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	return token.SignedString([]byte(s.secret))
+}
+
+func (s *JWTService) ValidateLinkToken(tokenString string) (*LinkTokenClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &LinkTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.secret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*LinkTokenClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token")
+	}
+
+	return claims, nil
 }
 
 func (s *JWTService) ValidateAccessToken(tokenString string) (*AccessTokenClaims, error) {
