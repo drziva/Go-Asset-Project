@@ -39,7 +39,7 @@ func NewAuthservice(repo *repository.UserRepository, googleConfig *oauth2.Config
 	}
 }
 
-func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
+func (s *AuthService) SignUp(dto dto.SignUpDTO) (*AuthResult, error) {
 	hashedPassword, err := hashPassword(dto.Password)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,22 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
 
 	//CREATE USER AND MAP POTENTIAL ERROR
 	err = s.repo.CreateUser(user)
-	return user, dbErrors.MapDBError(err)
+
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		user, err = s.repo.GetUserByEmail(user.Email)
+		if err != nil {
+			fmt.Print("----------------USER----------------", user)
+			if user.AuthProvider == constants.AuthProviderGoogle {
+				linkToken, err := s.jwtService.GenerateLinkToken(user.Email)
+				if err != nil {
+					return nil, err
+				}
+				return &AuthResult{User: nil, Linked: false, LinkToken: linkToken}, err
+			}
+		}
+	}
+
+	return &AuthResult{User: user, Linked: false, LinkToken: "obaj"}, dbErrors.MapDBError(err)
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
@@ -135,9 +150,12 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*A
 				Name:         data.Name,
 				AuthProvider: constants.AuthProviderGoogle,
 			}
-			s.repo.CreateUser(user)
+			err = s.repo.CreateUser(user)
+			if err != nil {
+				return nil, "", dbErrors.MapDBError(err)
+			}
 		} else {
-			return nil, "", err
+			return nil, "", dbErrors.MapDBError(err)
 		}
 	}
 

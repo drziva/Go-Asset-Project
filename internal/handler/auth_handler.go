@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
 	httpErrors "go-project/internal/handler/errors"
@@ -38,14 +37,18 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.SignUp(dto)
+	authResult, err := h.authService.SignUp(dto)
 	if err != nil {
+		if authResult.Linked == false {
+			c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
+			return
+		}
 		httpErrors.HandleError(c, err)
 
 		return
 	}
 
-	c.JSON(http.StatusCreated, mappers.ToLoginResponse(*user))
+	c.JSON(http.StatusCreated, mappers.ToLoginResponse(*authResult.User))
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -126,8 +129,6 @@ func (h *AuthHandler) LinkAndLogin(c *gin.Context) {
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		apiErrors.HandleError(c, err)
 	}
-	fmt.Print("-----------TOKEN------------------", dto.LinkToken)
-
 	user, token, err := h.authService.LinkAndLogin(dto)
 	if err != nil {
 		apiErrors.HandleError(c, err)
