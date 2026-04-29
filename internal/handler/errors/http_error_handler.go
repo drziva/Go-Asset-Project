@@ -35,6 +35,7 @@ func HandleError(c *gin.Context, err error) {
 	// 400
 	case errors.Is(err, appErrors.ErrInvalidInput),
 		errors.Is(err, appErrors.ErrMissingRequiredField),
+		errors.Is(err, appErrors.ErrInvalidLinkToken),
 		errors.Is(err, appErrors.ErrInvalidFormat):
 
 		c.JSON(http.StatusBadRequest, gin.H{

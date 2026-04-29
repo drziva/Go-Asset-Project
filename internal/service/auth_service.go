@@ -16,7 +16,6 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
-	"gorm.io/gorm"
 )
 
 type AuthService struct {
@@ -26,9 +25,9 @@ type AuthService struct {
 }
 
 type AuthResult struct {
-	User      *models.User
-	Linked    bool
-	LinkToken string
+	User         *models.User
+	RequiresLink bool
+	LinkToken    string
 }
 
 func NewAuthservice(repo *repository.UserRepository, googleConfig *oauth2.Config, jwtService *JWTService) *AuthService {
@@ -54,21 +53,27 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*AuthResult, error) {
 	//CREATE USER AND MAP POTENTIAL ERROR
 	err = s.repo.CreateUser(user)
 
-	if errors.Is(err, gorm.ErrDuplicatedKey) {
-		user, err = s.repo.GetUserByEmail(user.Email)
+	//ACCOUNT LINKING LOGIC -- CHECKING IF EMAIL ALREADY EXISTS/USER WANTS TO LINK
+	mappedErr := dbErrors.MapDBError(err)
+	if errors.Is(mappedErr, appErrors.ErrEmailAlreadyExists) { // check if email already exists
+		existingUser, err := s.repo.GetUserByEmail(user.Email) //get that user
 		if err != nil {
-			fmt.Print("----------------USER----------------", user)
-			if user.AuthProvider == constants.AuthProviderGoogle {
-				linkToken, err := s.jwtService.GenerateLinkToken(user.Email)
-				if err != nil {
-					return nil, err
-				}
-				return &AuthResult{User: nil, Linked: false, LinkToken: linkToken}, err
+			return nil, mappedErr
+		}
+		if existingUser.AuthProvider == constants.AuthProviderGoogle { // check if the email is provided by google
+			linkToken, err := s.jwtService.GenerateLinkToken(existingUser.Email)
+			if err != nil {
+				return nil, err
 			}
+			return &AuthResult{User: nil, RequiresLink: true, LinkToken: linkToken}, nil
 		}
 	}
 
-	return &AuthResult{User: user, Linked: false, LinkToken: "obaj"}, dbErrors.MapDBError(err)
+	if err != nil {
+		return nil, mappedErr
+	}
+
+	return &AuthResult{User: user, RequiresLink: false, LinkToken: ""}, nil
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
@@ -118,7 +123,7 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*A
 		return nil, "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, "", fmt.Errorf("google userinfo fialed: %s", resp.Status)
+		return nil, "", fmt.Errorf("google userinfo failed: %s", resp.Status)
 	}
 	defer resp.Body.Close()
 
@@ -140,11 +145,12 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*A
 			if err != nil {
 				return nil, "", err
 			}
-			return &AuthResult{User: user, Linked: false, LinkToken: linkToken}, "", err
+			return &AuthResult{User: user, RequiresLink: true, LinkToken: linkToken}, "", nil
 		}
 	}
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		mappedErr := dbErrors.MapDBError(err)
+		if errors.Is(mappedErr, appErrors.ErrNotFound) {
 			user = &models.User{
 				Email:        data.Email,
 				Name:         data.Name,
@@ -164,13 +170,13 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*A
 		return nil, "", err
 	}
 
-	return &AuthResult{User: user, Linked: true, LinkToken: ""}, jwt, nil
+	return &AuthResult{User: user, RequiresLink: false, LinkToken: ""}, jwt, nil
 }
 
 func (s *AuthService) LinkAndLogin(linkRequest dto.LinkRequest) (*models.User, string, error) {
 	tokenClaims, err := s.jwtService.ValidateLinkToken(linkRequest.LinkToken)
 	if err != nil {
-		return nil, "", err
+		return nil, "", appErrors.ErrInvalidLinkToken
 	}
 
 	userEmail := tokenClaims.Email
@@ -180,7 +186,22 @@ func (s *AuthService) LinkAndLogin(linkRequest dto.LinkRequest) (*models.User, s
 		Password: linkRequest.Password,
 	}
 
-	return s.Login(*loginDTO)
+	user, jwt, err := s.Login(*loginDTO)
+	if err != nil {
+		mappedErr := dbErrors.MapDBError(err)
+		if errors.Is(mappedErr, appErrors.ErrUnauthorized) {
+			return nil, "", appErrors.ErrUnauthorized
+		}
+		return nil, "", mappedErr
+	}
+
+	user.AuthProvider = constants.AuthProviderGoogle
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, "", dbErrors.MapDBError(err)
+	}
+
+	return user, jwt, nil
 }
 
 func hashPassword(password string) (string, error) {

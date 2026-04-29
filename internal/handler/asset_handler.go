@@ -27,10 +27,9 @@ func NewAssetHandler(assetService *service.AssetService) *AssetHandler {
 
 func (h *AssetHandler) UploadFile(c *gin.Context) (*dto.ServiceCreateAssetDTO, error) {
 	file, err := c.FormFile("file")
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "could not fetch file",
+			"error": "file malformed or missing",
 		})
 		return nil, err
 	}
@@ -50,9 +49,7 @@ func (h *AssetHandler) UploadFile(c *gin.Context) (*dto.ServiceCreateAssetDTO, e
 
 	err = os.MkdirAll(uploadFolderDst, os.ModePerm)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "could not create uploads folder",
-		})
+		apiErrors.HandleError(c, err)
 
 		return nil, err
 	}

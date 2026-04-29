@@ -3,7 +3,6 @@ package handler
 import (
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
-	httpErrors "go-project/internal/handler/errors"
 	"go-project/internal/handler/utils"
 	"go-project/internal/mappers"
 	"go-project/internal/service"
@@ -30,21 +29,20 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 	var dto dto.SignUpDTO
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		apiErrors.HandleError(c, err)
 
 		return
 	}
 
 	authResult, err := h.authService.SignUp(dto)
-	if err != nil {
-		if authResult.Linked == false {
-			c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
-			return
-		}
-		httpErrors.HandleError(c, err)
 
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	if authResult != nil && authResult.RequiresLink == true && authResult.LinkToken != "" {
+		c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
 		return
 	}
 
@@ -55,18 +53,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var dto dto.LoginDTO
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		apiErrors.HandleError(c, err)
 
 		return
 	}
 
 	user, token, err := h.authService.Login(dto)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid credentials",
-		})
+		apiErrors.HandleError(c, err)
 
 		return
 	}
@@ -107,14 +101,16 @@ func (h *AuthHandler) GoogleCallback(c *gin.Context) {
 	authResult, token, err := h.authService.HandleGoogleCallback(c.Request.Context(), code)
 	if err != nil {
 		apiErrors.HandleError(c, err)
+		return
 	}
 
-	if authResult.Linked == false {
+	if authResult.RequiresLink == true {
 		c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
+		return
 	}
 
 	if err != nil {
-		c.JSON(500, gin.H{"error": "auth failed"})
+		apiErrors.HandleError(c, err)
 		return
 	}
 
@@ -128,6 +124,7 @@ func (h *AuthHandler) LinkAndLogin(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		apiErrors.HandleError(c, err)
+		return
 	}
 	user, token, err := h.authService.LinkAndLogin(dto)
 	if err != nil {

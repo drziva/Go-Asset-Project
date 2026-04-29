@@ -14,4 +14,5 @@ var (
 	ErrInvalidCredentials   = errors.New("invalid credentials")
 	ErrUnauthorized         = errors.New("unauthorized")
 	ErrForbidden            = errors.New("forbidden")
+	ErrInvalidLinkToken     = errors.New("invalid or expired link token")
 )
