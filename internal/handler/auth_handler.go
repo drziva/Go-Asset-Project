@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
-	"fmt"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
 	"go-project/internal/handler/utils"
@@ -53,8 +51,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 			Code:        authResult.VerificationCode,
 		}
 
-		body, _ := json.Marshal(emailRequestDTO)
-		fmt.Print("-----------------OUTGOING DTO -----------------------------", string(body))
 		msg, err := h.emailService.SendVerificationEmail(ctx, *emailRequestDTO)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
