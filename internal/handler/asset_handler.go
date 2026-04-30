@@ -281,3 +281,21 @@ func (h *AssetHandler) UpdateAnyAsset(c *gin.Context) {
 
 	c.JSON(http.StatusOK, mappers.ToAssetResponse(*updatedAsset))
 }
+
+func (h *AssetHandler) DeleteAnyAsset(c *gin.Context) {
+	userID := utils.ExtractUserID(c)
+	ID, err := utils.ExtractIDParam(c)
+
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	err = h.assetService.DeleteAsset(userID, ID)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}

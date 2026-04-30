@@ -14,5 +14,6 @@ type User struct {
 	CreatedAt    time.Time
 	AuthProvider constants.AuthProvider `gorm:"type:varchar(20);not null;default:local;check:provider IN ('local','google')"`
 
-	Assets []Asset `grom:"foreignKey:UserID"` // O:M
+	Assets            []Asset            `gorm:"foreignKey:UserID;constraint:onDelete:CASCADE;"` // O:M
+	VerificationCodes []VerificationCode `gorm:"foreignKey:UserID"`
 }

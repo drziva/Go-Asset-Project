@@ -25,9 +25,30 @@ func MapDBError(err error) error {
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		// code 23505 is unique_violation in PostgreSQL -> email already exists
-		if pgErr.Code == "23505" {
-			return domainErrors.ErrEmailAlreadyExists
+
+		switch pgErr.Code {
+
+		case "23505": // unique_violation
+			// optionally inspect constraint name
+			if pgErr.ConstraintName == "idx_users_email" {
+				return domainErrors.ErrEmailAlreadyExists
+			}
+			return domainErrors.ErrConflict
+
+		case "23503": // foreign_key_violation
+			return domainErrors.ErrInvalidReference
+
+		case "23502": // not_null_violation
+			return domainErrors.ErrMissingRequiredField
+
+		case "23514": // check_violation
+			return domainErrors.ErrInvalidInput
+
+		case "22P02": // invalid_text_representation
+			return domainErrors.ErrInvalidFormat
+
+		case "40P01": // deadlock_detected
+			return domainErrors.ErrConflict // or retry logic if you want to be fancy
 		}
 	}
 

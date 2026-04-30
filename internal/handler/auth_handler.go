@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
 	"go-project/internal/handler/utils"
@@ -13,36 +15,53 @@ import (
 
 type AuthHandler struct {
 	authService   *service.AuthService
+	emailService  *service.EmailService
 	cookieService *service.CookieService
 	accessTTL     int
 }
 
-func NewAuthHandler(authService *service.AuthService, cookieService *service.CookieService, accessTTL int) *AuthHandler {
+func NewAuthHandler(authService *service.AuthService, emailService *service.EmailService, cookieService *service.CookieService, accessTTL int) *AuthHandler {
 	return &AuthHandler{
 		authService,
+		emailService,
 		cookieService,
 		accessTTL,
 	}
 }
 
 func (h *AuthHandler) SignUp(c *gin.Context) {
-	var dto dto.SignUpDTO
+	var signUpDTO dto.SignUpDTO
+	ctx := c.Request.Context()
 
-	if err := c.ShouldBindJSON(&dto); err != nil {
+	if err := c.ShouldBindJSON(&signUpDTO); err != nil {
 		apiErrors.HandleError(c, err)
 
 		return
 	}
 
-	authResult, err := h.authService.SignUp(dto)
+	authResult, err := h.authService.SignUp(signUpDTO)
 
 	if err != nil {
 		apiErrors.HandleError(c, err)
 		return
 	}
 
-	if authResult != nil && authResult.RequiresLink == true && authResult.LinkToken != "" {
-		c.JSON(http.StatusOK, gin.H{"link_token": authResult.LinkToken})
+	if authResult != nil && authResult.RequiresLink == true && authResult.VerificationCode != "" {
+		emailRequestDTO := &dto.SendEmailRequest{
+			Email:       signUpDTO.Email,
+			RequestType: "link_account",
+			Code:        authResult.VerificationCode,
+		}
+
+		body, _ := json.Marshal(emailRequestDTO)
+		fmt.Print("-----------------OUTGOING DTO -----------------------------", string(body))
+		msg, err := h.emailService.SendVerificationEmail(ctx, *emailRequestDTO)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, msg)
 		return
 	}
 

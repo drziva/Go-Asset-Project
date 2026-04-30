@@ -5,6 +5,7 @@ import (
 	"go-project/internal/models"
 	"go-project/internal/repository"
 	dbErrors "go-project/internal/service/errors"
+	"os"
 )
 
 type AssetService struct {
@@ -101,5 +102,29 @@ func (s *AssetService) UpdateAnyAsset(ID uint, dto dto.UpdateAssetDTO) (*models.
 }
 
 func (s *AssetService) DeleteAsset(userID, ID uint) error {
+	asset, err := s.repo.GetAssetById(userID, ID)
+	if err != nil {
+		return dbErrors.MapDBError(err)
+	}
+
+	err = os.Remove(asset.FilePath)
+	if err != nil {
+		return dbErrors.MapDBError(err)
+	}
+
 	return dbErrors.MapDBError(s.repo.DeleteAsset(userID, ID))
+}
+
+func (s *AssetService) DeleteAnyAsset(ID uint) error {
+	asset, err := s.repo.GetAnyAssetById(ID)
+	if err != nil {
+		return dbErrors.MapDBError(err)
+	}
+
+	err = os.Remove(asset.FilePath)
+	if err != nil {
+		return dbErrors.MapDBError(err)
+	}
+
+	return dbErrors.MapDBError(s.repo.DeleteAnyAsset(ID))
 }

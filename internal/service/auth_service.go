@@ -2,6 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,9 +23,10 @@ import (
 )
 
 type AuthService struct {
-	repo         *repository.UserRepository
-	googleConfig *oauth2.Config
-	jwtService   *JWTService
+	repo             *repository.UserRepository
+	verificationRepo *repository.VerificationCodeRepository
+	googleConfig     *oauth2.Config
+	jwtService       *JWTService
 }
 
 type AuthResult struct {
@@ -30,15 +35,22 @@ type AuthResult struct {
 	LinkToken    string
 }
 
-func NewAuthservice(repo *repository.UserRepository, googleConfig *oauth2.Config, jwtService *JWTService) *AuthService {
+type SignUpResult struct {
+	User             *models.User
+	RequiresLink     bool
+	VerificationCode string
+}
+
+func NewAuthservice(repo *repository.UserRepository, verificationRepo *repository.VerificationCodeRepository, googleConfig *oauth2.Config, jwtService *JWTService) *AuthService {
 	return &AuthService{
 		repo,
+		verificationRepo,
 		googleConfig,
 		jwtService,
 	}
 }
 
-func (s *AuthService) SignUp(dto dto.SignUpDTO) (*AuthResult, error) {
+func (s *AuthService) SignUp(dto dto.SignUpDTO) (*SignUpResult, error) {
 	hashedPassword, err := hashPassword(dto.Password)
 	if err != nil {
 		return nil, err
@@ -61,11 +73,16 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*AuthResult, error) {
 			return nil, mappedErr
 		}
 		if existingUser.AuthProvider == constants.AuthProviderGoogle { // check if the email is provided by google
-			linkToken, err := s.jwtService.GenerateLinkToken(existingUser.Email)
+			verificationCode, err := generateSixDigitCode()
 			if err != nil {
 				return nil, err
 			}
-			return &AuthResult{User: nil, RequiresLink: true, LinkToken: linkToken}, nil
+			err = s.saveCodeToDB(existingUser.ID, verificationCode, "link_account")
+			if err != nil {
+				return nil, err
+			}
+			return &SignUpResult{User: nil, RequiresLink: true, VerificationCode: verificationCode}, nil // This is completely broken as google users wont have PASSWORDS
+
 		}
 	}
 
@@ -73,7 +90,7 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*AuthResult, error) {
 		return nil, mappedErr
 	}
 
-	return &AuthResult{User: user, RequiresLink: false, LinkToken: ""}, nil
+	return &SignUpResult{User: user, RequiresLink: false, VerificationCode: ""}, nil
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
@@ -138,38 +155,38 @@ func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*A
 	}
 
 	user, err := s.repo.GetUserByEmail(data.Email)
+	mappedErr := dbErrors.MapDBError(err)
 
-	if err == nil {
+	if err == nil { // If user exists as local -> return linking token to be used by LinkAndLogin()
 		if user.AuthProvider == constants.AuthProviderLocal {
 			linkToken, err := s.jwtService.GenerateLinkToken(user.Email)
 			if err != nil {
 				return nil, "", err
 			}
-			return &AuthResult{User: user, RequiresLink: true, LinkToken: linkToken}, "", nil
+			return &AuthResult{User: nil, RequiresLink: true, LinkToken: linkToken}, "", nil
 		}
 	}
-	if err != nil {
-		mappedErr := dbErrors.MapDBError(err)
-		if errors.Is(mappedErr, appErrors.ErrNotFound) {
-			user = &models.User{
-				Email:        data.Email,
-				Name:         data.Name,
-				AuthProvider: constants.AuthProviderGoogle,
-			}
-			err = s.repo.CreateUser(user)
-			if err != nil {
-				return nil, "", dbErrors.MapDBError(err)
-			}
-		} else {
+
+	if errors.Is(mappedErr, appErrors.ErrNotFound) { // If user is not found, create the user and set provider = 'google'
+		user = &models.User{
+			Email:        data.Email,
+			Name:         data.Name,
+			AuthProvider: constants.AuthProviderGoogle,
+		}
+		err = s.repo.CreateUser(user)
+		if err != nil {
 			return nil, "", dbErrors.MapDBError(err)
 		}
 	}
 
-	jwt, err := s.jwtService.GenerateAccessToken(user.ID, user.IsAdmin)
+	if err != nil { // Handle other errors
+		return nil, "", dbErrors.MapDBError(err)
+	}
+
+	jwt, err := s.jwtService.GenerateAccessToken(user.ID, user.IsAdmin) // Generate a JWT access token
 	if err != nil {
 		return nil, "", err
 	}
-
 	return &AuthResult{User: user, RequiresLink: false, LinkToken: ""}, jwt, nil
 }
 
@@ -211,4 +228,27 @@ func hashPassword(password string) (string, error) {
 	)
 
 	return string(hash), err
+}
+
+func (s *AuthService) saveCodeToDB(userID uint, code string, codeType dto.RequestType) error {
+	codeHash := hashCode(code)
+	err := s.verificationRepo.CreateCode(userID, codeHash, codeType)
+
+	return err
+}
+
+func generateSixDigitCode() (string, error) {
+	var n uint32
+	err := binary.Read(rand.Reader, binary.BigEndian, &n)
+	if err != nil {
+		return "", err
+	}
+
+	code := n % 1000000
+	return fmt.Sprintf("%06d", code), nil
+}
+
+func hashCode(code string) string {
+	hash := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(hash[:])
 }

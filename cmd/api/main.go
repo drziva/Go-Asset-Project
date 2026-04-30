@@ -20,6 +20,7 @@ func main() {
 	database.AutoMigrate(
 		&models.User{},
 		&models.Asset{},
+		&models.VerificationCode{},
 	)
 
 	r := routes.SetupRoutes(database)
