@@ -35,6 +35,7 @@ func HandleError(c *gin.Context, err error) {
 	// 400
 	case errors.Is(err, appErrors.ErrInvalidInput),
 		errors.Is(err, appErrors.ErrMissingRequiredField),
+		errors.Is(err, appErrors.ErrInvalidLinkToken),
 		errors.Is(err, appErrors.ErrInvalidFormat):
 
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -43,6 +44,7 @@ func HandleError(c *gin.Context, err error) {
 
 	// 401
 	case errors.Is(err, appErrors.ErrInvalidCredentials),
+		errors.Is(err, appErrors.ErrInvalidVerificationCode),
 		errors.Is(err, appErrors.ErrUnauthorized):
 
 		if errors.Is(err, appErrors.ErrUnauthorized) {
@@ -60,6 +62,12 @@ func HandleError(c *gin.Context, err error) {
 			"error": err.Error(),
 		})
 
+	case errors.Is(err, appErrors.ErrEmailServiceFailed):
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error": "email service failed",
+		})
+
+	//500
 	default:
 
 		c.JSON(http.StatusInternalServerError, gin.H{

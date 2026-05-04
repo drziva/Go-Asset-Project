@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"go-project/internal/models"
 
 	"gorm.io/gorm"
@@ -17,9 +18,15 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 }
 
 func (r *UserRepository) CreateUser(user *models.User) error {
-	err := r.db.Create(user).Error
+	return r.db.Create(user).Error
+}
 
-	return err
+func (r *UserRepository) UpdateUser(user *models.User) error {
+	if user.ID == 0 {
+		return errors.New("missing user ID")
+	}
+
+	return r.db.Model(&models.User{}).Where("id = ?", user.ID).Updates(user).Error
 }
 
 func (r *UserRepository) GetUserByEmail(email string) (*models.User, error) {

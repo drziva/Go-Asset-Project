@@ -1,29 +1,57 @@
 package service
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"go-project/internal/constants"
 	appErrors "go-project/internal/errors"
 	dbErrors "go-project/internal/service/errors"
+	"net/http"
+	"time"
 
 	"go-project/internal/dto"
 	"go-project/internal/models"
 	"go-project/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
 )
 
 type AuthService struct {
-	repo       *repository.UserRepository
-	jwtService *JWTService
+	repo             *repository.UserRepository
+	verificationRepo *repository.VerificationCodeRepository
+	googleConfig     *oauth2.Config
+	jwtService       *JWTService
 }
 
-func NewAuthservice(repo *repository.UserRepository, jwtService *JWTService) *AuthService {
+type AuthResult struct {
+	User         *models.User
+	RequiresLink bool
+	LinkToken    string
+}
+
+type SignUpResult struct {
+	User             *models.User
+	RequiresLink     bool
+	VerificationCode string
+}
+
+func NewAuthservice(repo *repository.UserRepository, verificationRepo *repository.VerificationCodeRepository, googleConfig *oauth2.Config, jwtService *JWTService) *AuthService {
 	return &AuthService{
 		repo,
+		verificationRepo,
+		googleConfig,
 		jwtService,
 	}
 }
 
-func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
+func (s *AuthService) SignUp(dto dto.SignUpDTO) (*SignUpResult, error) {
 	hashedPassword, err := hashPassword(dto.Password)
 	if err != nil {
 		return nil, err
@@ -37,7 +65,32 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*models.User, error) {
 
 	//CREATE USER AND MAP POTENTIAL ERROR
 	err = s.repo.CreateUser(user)
-	return user, dbErrors.MapDBError(err)
+
+	//ACCOUNT LINKING LOGIC -- CHECKING IF EMAIL ALREADY EXISTS/USER WANTS TO LINK
+	mappedErr := dbErrors.MapDBError(err)
+	if errors.Is(mappedErr, appErrors.ErrEmailAlreadyExists) { // check if email already exists
+		existingUser, err := s.repo.GetUserByEmail(user.Email) //get that user
+		if err != nil {
+			return nil, mappedErr
+		}
+		if existingUser.AuthProvider == constants.AuthProviderGoogle { // check if the email is provided by google
+			verificationCode, err := generateSixDigitCode()
+			if err != nil {
+				return nil, err
+			}
+			err = s.saveCodeToDB(existingUser.ID, verificationCode, "link_account")
+			if err != nil {
+				return nil, err
+			}
+			return &SignUpResult{User: nil, RequiresLink: true, VerificationCode: verificationCode}, nil
+		}
+	}
+
+	if err != nil {
+		return nil, mappedErr
+	}
+
+	return &SignUpResult{User: user, RequiresLink: false, VerificationCode: ""}, nil
 }
 
 func (s *AuthService) Login(dto dto.LoginDTO) (*models.User, string, error) {
@@ -70,6 +123,199 @@ func (s *AuthService) Me(id uint) (*models.User, error) {
 	return user, nil
 }
 
+func (s *AuthService) GetGoogleLoginURL() string {
+	return s.googleConfig.AuthCodeURL("random-state")
+}
+
+func (s *AuthService) HandleGoogleCallback(ctx context.Context, code string) (*AuthResult, string, error) {
+	token, err := s.googleConfig.Exchange(ctx, code)
+	if err != nil {
+		return nil, "", err
+	}
+
+	client := s.googleConfig.Client(ctx, token)
+
+	resp, err := client.Get("https://openidconnect.googleapis.com/v1/userinfo")
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("google userinfo failed: %s", resp.Status)
+	}
+	defer resp.Body.Close()
+
+	var data struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&data)
+	if err != nil {
+		return nil, "", err
+	}
+
+	user, err := s.repo.GetUserByEmail(data.Email)
+	mappedErr := dbErrors.MapDBError(err)
+
+	if err == nil { // If user exists as local -> return linking token to be used by LinkAndLogin()
+		if user.AuthProvider == constants.AuthProviderLocal {
+			linkToken, err := s.jwtService.GenerateLinkToken(user.Email)
+			if err != nil {
+				return nil, "", err
+			}
+			return &AuthResult{User: nil, RequiresLink: true, LinkToken: linkToken}, "", nil
+		}
+	}
+
+	if errors.Is(mappedErr, appErrors.ErrNotFound) { // If user is not found, create the user and set provider = 'google'
+		user = &models.User{
+			Email:        data.Email,
+			Name:         data.Name,
+			AuthProvider: constants.AuthProviderGoogle,
+		}
+		err = s.repo.CreateUser(user)
+		if err != nil {
+			return nil, "", dbErrors.MapDBError(err)
+		}
+	}
+
+	if err != nil { // Handle other errors
+		return nil, "", dbErrors.MapDBError(err)
+	}
+
+	jwt, err := s.jwtService.GenerateAccessToken(user.ID, user.IsAdmin) // Generate a JWT access token
+	if err != nil {
+		return nil, "", err
+	}
+	return &AuthResult{User: user, RequiresLink: false, LinkToken: ""}, jwt, nil
+}
+
+func (s *AuthService) LinkAndLogin(linkRequest dto.LinkRequest) (*models.User, string, error) {
+	tokenClaims, err := s.jwtService.ValidateLinkToken(linkRequest.LinkToken)
+	if err != nil {
+		return nil, "", appErrors.ErrInvalidLinkToken
+	}
+
+	userEmail := tokenClaims.Email
+
+	loginDTO := &dto.LoginDTO{
+		Email:    userEmail,
+		Password: linkRequest.Password,
+	}
+
+	user, jwt, err := s.Login(*loginDTO)
+	if err != nil {
+		mappedErr := dbErrors.MapDBError(err)
+		if errors.Is(mappedErr, appErrors.ErrUnauthorized) {
+			return nil, "", appErrors.ErrUnauthorized
+		}
+		return nil, "", mappedErr
+	}
+
+	user.AuthProvider = constants.AuthProviderGoogle
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, "", dbErrors.MapDBError(err)
+	}
+
+	return user, jwt, nil
+}
+
+func (s *AuthService) VerifyLinkAndLogin(verificationRequest dto.VerificationRequest) (*models.User, error) {
+	user, err := s.repo.GetUserByEmail(verificationRequest.Email)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	verificationCode, err := s.verificationRepo.GetCodeForUser(user.ID, constants.LinkRequest)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	if time.Now().After(verificationCode.ExpiresAt) {
+		err = s.verificationRepo.DeleteCode(user.ID, verificationCode.ID)
+		if err != nil {
+			fmt.Printf("error deleting code: %v", err)
+		}
+		return nil, appErrors.ErrExpiredVerificationCode
+	}
+
+	codeMatch := compareHashedCode(verificationCode.CodeHash, verificationRequest.VerificationCode)
+	if codeMatch != true {
+		return nil, appErrors.ErrInvalidVerificationCode
+	}
+
+	hashedPassword, err := hashPassword(verificationRequest.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Password = hashedPassword
+
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	err = s.verificationRepo.DeleteCode(user.ID, verificationCode.ID)
+	if err != nil {
+		fmt.Printf("error deleting code: %v", err)
+	}
+
+	return user, nil
+}
+
+func (s *AuthService) ForgotPassword(userEmail string) (string, error) {
+	user, err := s.repo.GetUserByEmail(userEmail)
+	if err != nil {
+		return "", dbErrors.MapDBError(err)
+	}
+	verificationCode, err := generateSixDigitCode()
+	if err != nil {
+		return "", err
+	}
+
+	hashedCode := hashCode(verificationCode)
+
+	s.verificationRepo.CreateCode(user.ID, hashedCode, constants.ResetPasswordRequest)
+
+	return verificationCode, nil
+}
+
+func (s *AuthService) ResetPassword(resetPasswordDTO dto.ResetPasswordDTO) (*models.User, error) {
+	user, err := s.repo.GetUserByEmail(resetPasswordDTO.Email)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	verificationCode, err := s.verificationRepo.GetCodeForUser(user.ID, constants.ResetPasswordRequest)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	if time.Now().After(verificationCode.ExpiresAt) {
+		return nil, appErrors.ErrExpiredVerificationCode
+	}
+
+	codeMatch := compareHashedCode(verificationCode.CodeHash, resetPasswordDTO.VerificationCode)
+	if codeMatch != true {
+		return nil, appErrors.ErrInvalidVerificationCode
+	}
+
+	hashedPassword, err := hashPassword(resetPasswordDTO.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Password = hashedPassword
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return user, nil
+}
+
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword(
 		[]byte(password),
@@ -77,4 +323,33 @@ func hashPassword(password string) (string, error) {
 	)
 
 	return string(hash), err
+}
+
+func (s *AuthService) saveCodeToDB(userID uint, code string, codeType dto.RequestType) error {
+	codeHash := hashCode(code)
+	err := s.verificationRepo.CreateCode(userID, codeHash, codeType)
+
+	return err
+}
+
+func generateSixDigitCode() (string, error) {
+	var n uint32
+	err := binary.Read(rand.Reader, binary.BigEndian, &n)
+	if err != nil {
+		return "", err
+	}
+
+	code := n % 1000000
+	return fmt.Sprintf("%06d", code), nil
+}
+
+func hashCode(code string) string {
+	hash := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(hash[:])
+}
+
+func compareHashedCode(storedHash, providedCode string) bool {
+	hash := sha256.Sum256([]byte(providedCode))
+	hashStr := hex.EncodeToString(hash[:])
+	return hashStr == storedHash
 }

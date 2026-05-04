@@ -16,6 +16,8 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
 	cfg := config.LoadAuthConfig()
+	googleCfg := client.NewGoogleOauthConfig()
+
 	cookieService := service.NewCookieService(cfg.CookieDomain, cfg.IsProduction)
 	jwtService := service.NewJWTService(cfg.JWTSecret, cfg.AccessTokenTTL)
 
@@ -26,29 +28,41 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 	authMiddleware := middleware.AuthMiddleware(jwtService)
 	adminMiddleware := middleware.AdminMiddleware()
 
-	//AUTH
-	authService := service.NewAuthservice(userRepo, jwtService)
-	authHandler := handler.NewAuthHandler(authService, cookieService, cfg.AccessTokenTTL)
-
 	//ASSETS
 	assetRepo := repository.NewAssetRepository(db)
 	assetService := service.NewAssetService(assetRepo)
 	assetHandler := handler.NewAssetHandler(assetService)
 
-	//MICROSERVICE
-	microClient := client.NewMicroClient("http://localhost:8081/api")
-	microService := service.NewMicroService(microClient)
-	microHandler := handler.NewMicroHandler(microService)
+	//EMAIL MICROSERVICE
+	emailClient := client.NewEmailClient("http://localhost:8081/api")
+	emailService := service.NewEmailService(emailClient)
+	emailHandler := handler.NewEmailHandler(emailService)
+
+	//AUTH
+	verificationRepo := repository.NewVerificationCodeRepository(db)
+	authService := service.NewAuthservice(userRepo, verificationRepo, googleCfg, jwtService)
+	authHandler := handler.NewAuthHandler(authService, emailService, cookieService, cfg.AccessTokenTTL)
 
 	api := r.Group("/api")
-	//DEV - MICROSERVICE TEST
-	api.GET("/hello", microHandler.GetHello)
+
+	//DEV - EMAIL MICROSERVICE TEST
+	email := api.Group("/email")
+	email.GET("", emailHandler.SendEmail)
+	email.POST("/verification", emailHandler.SendVerificationEmail)
 
 	{
 		auth := api.Group("/auth")
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/signup", authHandler.SignUp)
 		auth.POST("/logout", authHandler.Logout)
+		auth.GET("/login/google", authHandler.GoogleLogin)
+
+		auth.GET("/google/callback", authHandler.GoogleCallback)
+		auth.POST("/google/link-account", authHandler.LinkAndLogin)
+		auth.POST("/google/verify-account", authHandler.VerifyLinkAndLogin)
+
+		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/reset-password", authHandler.ResetPassword)
 
 		auth.Use(authMiddleware)
 		{
@@ -81,6 +95,7 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 					adminAssets.GET("", assetHandler.GetAllAssets)
 					adminAssets.GET("/:id", assetHandler.GetAnyAssetById)
 					adminAssets.PUT("/:id", assetHandler.UpdateAnyAsset)
+					adminAssets.DELETE("/:id", assetHandler.DeleteAnyAsset)
 
 					adminAssets.GET("/:id/download", assetHandler.DownloadAnyAssetById)
 				}
