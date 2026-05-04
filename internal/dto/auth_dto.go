@@ -11,8 +11,8 @@ type SignUpDTO struct {
 }
 
 type LoginDTO struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 type LoginResponse struct {
@@ -25,5 +25,21 @@ type LoginResponse struct {
 
 type LinkRequest struct {
 	LinkToken string `json:"link_token"`
-	Password  string `json:"password"`
+	Password  string `json:"password" binding:"required,min=6,max=50"`
+}
+
+type VerificationRequest struct {
+	Email            string `json:"email" binding:"required,email"`
+	VerificationCode string `json:"verification_code" binding:"required"`
+	Password         string `json:"password" binding:"required,min=6,max=50"`
+}
+
+type ForgotPasswordDTO struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordDTO struct {
+	Email            string `json:"email" binding:"required,email"`
+	VerificationCode string `json:"verification_code" binding:"required"`
+	Password         string `json:"password" binding:"required,min=6,max=50"`
 }

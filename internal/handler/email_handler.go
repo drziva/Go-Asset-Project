@@ -37,7 +37,7 @@ func (h *EmailHandler) SendVerificationEmail(c *gin.Context) {
 	var emailRequest dto.SendEmailRequest
 	if err := c.ShouldBindJSON(&emailRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "missing or invalid email request object",
+			"error": err.Error(),
 		})
 		return
 	}

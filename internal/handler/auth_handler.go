@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"go-project/internal/constants"
 	"go-project/internal/dto"
 	apiErrors "go-project/internal/handler/errors"
 	"go-project/internal/handler/utils"
@@ -47,7 +48,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 	if authResult != nil && authResult.RequiresLink == true && authResult.VerificationCode != "" {
 		emailRequestDTO := &dto.SendEmailRequest{
 			Email:       signUpDTO.Email,
-			RequestType: "link_account",
+			RequestType: constants.LinkRequest,
 			Code:        authResult.VerificationCode,
 		}
 
@@ -148,6 +149,69 @@ func (h *AuthHandler) LinkAndLogin(c *gin.Context) {
 	}
 
 	h.cookieService.SetAccessTokenCookie(c, token, h.accessTTL)
+
+	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
+}
+
+func (h *AuthHandler) VerifyLinkAndLogin(c *gin.Context) {
+	var dto dto.VerificationRequest
+
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	user, err := h.authService.VerifyLinkAndLogin(dto)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"successfully linked account": mappers.ToLoginResponse(*user)})
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var forgotPasswordDTO dto.ForgotPasswordDTO
+	ctx := c.Request.Context()
+
+	if err := c.ShouldBindJSON(&forgotPasswordDTO); err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	verificationCode, err := h.authService.ForgotPassword(forgotPasswordDTO.Email)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	forgotPasswordRequest := &dto.SendEmailRequest{
+		Email:       forgotPasswordDTO.Email,
+		RequestType: constants.ResetPasswordRequest,
+		Code:        verificationCode,
+	}
+
+	_, err = h.emailService.SendVerificationEmail(ctx, *forgotPasswordRequest)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, "reset password code sent to email address")
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var resetPasswordDTO dto.ResetPasswordDTO
+	if err := c.ShouldBindJSON(&resetPasswordDTO); err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
+
+	user, err := h.authService.ResetPassword(resetPasswordDTO)
+	if err != nil {
+		apiErrors.HandleError(c, err)
+		return
+	}
 
 	c.JSON(http.StatusOK, mappers.ToLoginResponse(*user))
 }

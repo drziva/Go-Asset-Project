@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"go-project/internal/client"
 	"go-project/internal/dto"
+	"go-project/internal/errors"
 )
 
 type EmailService struct {
@@ -28,7 +30,8 @@ func (s *EmailService) SendEmail(ctx context.Context) (string, error) {
 func (s *EmailService) SendVerificationEmail(ctx context.Context, emailRequest dto.SendEmailRequest) (string, error) {
 	msg, err := s.emailClient.SendVerificationEmail(ctx, emailRequest)
 	if err != nil {
-		return "", err
+		fmt.Printf("email service error: %v", err)
+		return "", fmt.Errorf("%w: %v", errors.ErrEmailServiceFailed, err)
 	}
 
 	return msg, nil

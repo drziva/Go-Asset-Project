@@ -11,7 +11,7 @@ const (
 type SendEmailRequest struct {
 	Email       string      `json:"email"`
 	RequestType RequestType `json:"request_type"`
-	Code        string      `json:"code"`
+	Code        interface{} `json:"code"`
 }
 
 type EmailResponse struct {

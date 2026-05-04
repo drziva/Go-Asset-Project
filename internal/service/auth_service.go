@@ -13,6 +13,7 @@ import (
 	appErrors "go-project/internal/errors"
 	dbErrors "go-project/internal/service/errors"
 	"net/http"
+	"time"
 
 	"go-project/internal/dto"
 	"go-project/internal/models"
@@ -81,8 +82,7 @@ func (s *AuthService) SignUp(dto dto.SignUpDTO) (*SignUpResult, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &SignUpResult{User: nil, RequiresLink: true, VerificationCode: verificationCode}, nil // This is completely broken as google users wont have PASSWORDS
-
+			return &SignUpResult{User: nil, RequiresLink: true, VerificationCode: verificationCode}, nil
 		}
 	}
 
@@ -221,6 +221,101 @@ func (s *AuthService) LinkAndLogin(linkRequest dto.LinkRequest) (*models.User, s
 	return user, jwt, nil
 }
 
+func (s *AuthService) VerifyLinkAndLogin(verificationRequest dto.VerificationRequest) (*models.User, error) {
+	user, err := s.repo.GetUserByEmail(verificationRequest.Email)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	verificationCode, err := s.verificationRepo.GetCodeForUser(user.ID, constants.LinkRequest)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	if time.Now().After(verificationCode.ExpiresAt) {
+		err = s.verificationRepo.DeleteCode(user.ID, verificationCode.ID)
+		if err != nil {
+			fmt.Printf("error deleting code: %v", err)
+		}
+		return nil, appErrors.ErrExpiredVerificationCode
+	}
+
+	codeMatch := compareHashedCode(verificationCode.CodeHash, verificationRequest.VerificationCode)
+	if codeMatch != true {
+		return nil, appErrors.ErrInvalidVerificationCode
+	}
+
+	hashedPassword, err := hashPassword(verificationRequest.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Password = hashedPassword
+
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	err = s.verificationRepo.DeleteCode(user.ID, verificationCode.ID)
+	if err != nil {
+		fmt.Printf("error deleting code: %v", err)
+	}
+
+	return user, nil
+}
+
+func (s *AuthService) ForgotPassword(userEmail string) (string, error) {
+	user, err := s.repo.GetUserByEmail(userEmail)
+	if err != nil {
+		return "", dbErrors.MapDBError(err)
+	}
+	verificationCode, err := generateSixDigitCode()
+	if err != nil {
+		return "", err
+	}
+
+	hashedCode := hashCode(verificationCode)
+
+	s.verificationRepo.CreateCode(user.ID, hashedCode, constants.ResetPasswordRequest)
+
+	return verificationCode, nil
+}
+
+func (s *AuthService) ResetPassword(resetPasswordDTO dto.ResetPasswordDTO) (*models.User, error) {
+	user, err := s.repo.GetUserByEmail(resetPasswordDTO.Email)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	verificationCode, err := s.verificationRepo.GetCodeForUser(user.ID, constants.ResetPasswordRequest)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	if time.Now().After(verificationCode.ExpiresAt) {
+		return nil, appErrors.ErrExpiredVerificationCode
+	}
+
+	codeMatch := compareHashedCode(verificationCode.CodeHash, resetPasswordDTO.VerificationCode)
+	if codeMatch != true {
+		return nil, appErrors.ErrInvalidVerificationCode
+	}
+
+	hashedPassword, err := hashPassword(resetPasswordDTO.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Password = hashedPassword
+	err = s.repo.UpdateUser(user)
+	if err != nil {
+		return nil, dbErrors.MapDBError(err)
+	}
+
+	return user, nil
+}
+
 func hashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword(
 		[]byte(password),
@@ -251,4 +346,10 @@ func generateSixDigitCode() (string, error) {
 func hashCode(code string) string {
 	hash := sha256.Sum256([]byte(code))
 	return hex.EncodeToString(hash[:])
+}
+
+func compareHashedCode(storedHash, providedCode string) bool {
+	hash := sha256.Sum256([]byte(providedCode))
+	hashStr := hex.EncodeToString(hash[:])
+	return hashStr == storedHash
 }

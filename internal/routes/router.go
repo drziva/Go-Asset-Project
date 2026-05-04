@@ -59,6 +59,10 @@ func SetupRoutes(db *gorm.DB) *gin.Engine {
 
 		auth.GET("/google/callback", authHandler.GoogleCallback)
 		auth.POST("/google/link-account", authHandler.LinkAndLogin)
+		auth.POST("/google/verify-account", authHandler.VerifyLinkAndLogin)
+
+		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/reset-password", authHandler.ResetPassword)
 
 		auth.Use(authMiddleware)
 		{

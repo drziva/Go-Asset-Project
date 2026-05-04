@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-project/internal/dto"
+	"io"
 	"net/http"
 )
 
@@ -21,7 +22,7 @@ func NewEmailClient(baseURL string) *EmailClient {
 	}
 }
 
-func (c *EmailClient) SendEmail(ctx context.Context) (string, error) {
+func (c *EmailClient) SendEmail(ctx context.Context) (string, error) { // Placeholder function
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -58,6 +59,10 @@ func (c *EmailClient) SendVerificationEmail(ctx context.Context, emailRequest dt
 	}
 
 	res, err := c.http.Do(req)
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("email service error: %v", string(body))
+	}
 	if err != nil {
 		return "", err
 	}
